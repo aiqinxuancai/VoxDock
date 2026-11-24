@@ -16,3 +16,4 @@ build/
 .DS_Store
 Thumbs.db
 app/_version.py
+.claude/settings.local.json
