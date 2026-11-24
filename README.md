@@ -269,7 +269,7 @@ ruff check app tests
 
 ### 发布
 
-推送语义化版本标签后，GitHub Actions 会自动完成以下步骤：测试 → 构建多架构 Docker 镜像并推送到 GHCR → 构建 Windows 免安装版（构建后会实际启动 exe 做冒烟测试）→ 创建 Release。
+发布只由版本标签触发，推送普通提交不会构建镜像或发布。推送 `v` 开头的语义化版本标签后，GitHub Actions 会自动完成以下步骤：测试 → 构建多架构 Docker 镜像并推送到 GHCR → 构建 Windows 免安装版（构建后会实际启动 exe 做冒烟测试）→ 创建 Release。
 
 ```bash
 git tag v1.0.0 && git push origin v1.0.0
@@ -277,9 +277,11 @@ git tag v1.0.0 && git push origin v1.0.0
 
 | 触发方式 | Docker 镜像标签 | Windows 免安装版 | Release |
 | --- | --- | --- | --- |
-| 推送 `v1.2.3` 标签 | `1.2.3` · `1.2` · `1` · `latest` · `sha-xxxx` | ✅ 作为 Release 附件 | ✅ 自动生成更新日志，并附带 Windows 版、Docker 部署包和源码包 |
-| 推送到 `main` | `edge` · `sha-xxxx` | ✅ 作为 Actions Artifact（保留 30 天） | — |
+| 推送正式版标签 `v1.2.3` | `1.2.3` · `1.2` · `1` · `latest` · `sha-xxxx` | ✅ 作为 Release 附件 | ✅ 自动生成更新日志，并附带 Windows 版、Docker 部署包和源码包 |
+| 推送预发布标签 `v1.2.3-beta.1` | `1.2.3-beta.1` · `sha-xxxx`（不更新 `latest`） | ✅ 作为 Release 附件 | ✅ 标记为 Pre-release |
 | Pull Request | —（只运行测试） | — | — |
+
+> `0.x` 版本不会生成单独的主版本号镜像标签（如 `0`）。
 
 本地构建 Windows 免安装版（需要 Python 3.10+）：
 

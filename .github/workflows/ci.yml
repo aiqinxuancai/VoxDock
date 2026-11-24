@@ -1,6 +1,6 @@
 name: CI
 
-# main 分支与标签的推送由 release.yml 调用本工作流
+# Pull Request 时只运行测试；推送版本标签时由 release.yml 调用本工作流
 on:
   pull_request:
   workflow_call:
