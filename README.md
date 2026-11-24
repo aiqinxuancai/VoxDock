@@ -18,7 +18,7 @@
   <a href="#-界面预览">界面预览</a> ·
   <a href="#-支持平台">支持平台</a> ·
   <a href="#-api">API</a> ·
-  <a href="#-claude-code-skill">Claude Skill</a> ·
+  <a href="#-api-技能包">API 技能包</a> ·
   <a href="#-配置">配置</a> ·
   <a href="#-常见问题">FAQ</a>
 </p>
@@ -33,7 +33,7 @@
 - 🗂️ **管理音色**：统一的音色库，支持收藏、标签、状态跟踪，并能从各平台同步已有音色
 - 🎛️ **试听调参**：根据各平台的参数自动生成调节面板，实时生成并显示波形播放
 - 🔌 **简单 API**：一个 `POST /api/tts` 就能用任意平台的音色合成，还兼容 OpenAI TTS 接口
-- 🤖 **Claude Code Skill**：自带 `voxdock-api` skill 和命令行客户端，可以直接让 Claude 帮你合成语音、复刻声音
+- 🧰 **API 技能包**：`skills/voxdock-api` 提供可单独分发的 API 使用指南和命令行客户端，方便在其他项目中接入
 - 🐳 **开箱即用**：Docker 单容器 + SQLite，一条命令完成部署（amd64 / arm64）；还提供 **Windows 免安装版**，双击即可运行
 
 ## ✨ 特性
@@ -237,39 +237,31 @@ with client.audio.speech.with_streaming_response.create(
 
 </details>
 
-## 🤖 Claude Code Skill
+## 🧰 API 技能包
 
-仓库自带一个 [Claude Code](https://claude.com/claude-code) skill：[`.claude/skills/voxdock-api`](.claude/skills/voxdock-api/SKILL.md)。它向 Claude 说明 VoxDock API 的用法（鉴权、音色写法、各平台参数差异、多段复刻、错误处理），并附带一个只依赖 Python 标准库的命令行客户端。装好之后，可以直接对 Claude 说：
+[`skills/voxdock-api`](skills/voxdock-api/SKILL.md) 是一份可以单独分发的 VoxDock API 使用指南，附带命令行客户端。在其他项目中接入 VoxDock 时，可以直接把这个目录复制过去参考或使用。
 
-> 用「温柔知性女声」把 chapter1.txt 合成 mp3，语速 1.1
->
-> 用 MiniMax 复刻 rec1.wav 和 rec2.wav，名字叫「我的声音」
->
-> 帮我在这个 Node 项目里接入 VoxDock 的 TTS 接口
+| 文件 | 内容 |
+| --- | --- |
+| [`SKILL.md`](skills/voxdock-api/SKILL.md) | 连接与鉴权、音色写法、合成与复刻流程、代码示例、错误码 |
+| [`reference/endpoints.md`](skills/voxdock-api/reference/endpoints.md) | 全部接口的参数与返回结构 |
+| [`reference/providers.md`](skills/voxdock-api/reference/providers.md) | 各平台的模型、合成参数、复刻选项与限制 |
+| [`scripts/voxdock.py`](skills/voxdock-api/scripts/voxdock.py) | 命令行客户端，只依赖 Python 标准库（3.8+） |
 
-**安装**
-
-- 在本仓库目录中使用 Claude Code 时，skill 会自动加载。
-- 在其他项目中使用：把 `voxdock-api` 目录复制到 `~/.claude/skills/`（对所有项目生效），或复制到目标项目的 `.claude/skills/`。
-
-**配置**：通过环境变量告诉 skill 服务地址和 API Key（服务未设置管理员密码时可以不填 Key）。
+命令行客户端通过环境变量连接服务（服务未设置管理员密码时可以不填 Key）：
 
 ```bash
 export VOXDOCK_URL=http://localhost:8000
 export VOXDOCK_API_KEY=vd-xxxx
+
+python skills/voxdock-api/scripts/voxdock.py health                 # 检查服务、Key、平台配置
+python skills/voxdock-api/scripts/voxdock.py voices --status ready  # 列出可用音色
+python skills/voxdock-api/scripts/voxdock.py tts 12 "你好" -o hi.mp3 --speed 1.1
+python skills/voxdock-api/scripts/voxdock.py clone --provider minimax --name 我的声音 a.wav b.wav --wait
+python skills/voxdock-api/scripts/voxdock.py providers aliyun       # 查看平台的模型、参数与复刻选项
 ```
 
-命令行客户端也可以单独使用：
-
-```bash
-python .claude/skills/voxdock-api/scripts/voxdock.py health                 # 检查服务、Key、平台配置
-python .claude/skills/voxdock-api/scripts/voxdock.py voices --status ready  # 列出可用音色
-python .claude/skills/voxdock-api/scripts/voxdock.py tts 12 "你好" -o hi.mp3 --speed 1.1
-python .claude/skills/voxdock-api/scripts/voxdock.py clone --provider minimax --name 我的声音 a.wav b.wav --wait
-python .claude/skills/voxdock-api/scripts/voxdock.py providers aliyun       # 查看平台的模型、参数与复刻选项
-```
-
-skill 中的接口文档由测试保证与代码一致：新增或删除路由、平台参数而没有同步文档时，`pytest` 会失败。
+技能包中的接口文档由测试保证与代码一致：新增或删除路由、平台参数而没有同步文档时，`pytest` 会失败。
 
 ## ⚙ 配置
 
@@ -308,7 +300,7 @@ VoxDock/
 │   ├── routers/             # REST API
 │   └── static/              # Web 前端（Vue 3 ESM，免构建）
 ├── tests/                   # pytest + respx 模拟各平台接口
-├── .claude/skills/voxdock-api/  # Claude Code skill：API 使用说明 + 命令行客户端
+├── skills/voxdock-api/      # API 技能包：使用指南 + 命令行客户端
 ├── packaging/windows/       # PyInstaller 配置、打包脚本、图标、使用说明
 ├── Dockerfile · docker-compose.yml
 └── .github/workflows/       # CI、GHCR 镜像发布、Release
@@ -321,7 +313,7 @@ VoxDock/
 ```bash
 pip install -r requirements-dev.txt
 pytest            # 测试（各平台接口均已 mock，无需真实密钥）
-ruff check app tests .claude/skills
+ruff check app tests skills
 ```
 
 ### 发布

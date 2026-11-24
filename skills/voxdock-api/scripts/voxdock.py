@@ -47,7 +47,7 @@ class Client:
             q = {k: v for k, v in query.items() if v is not None and v != ""}
             if q:
                 url += "?" + urlencode({k: str(v).lower() if isinstance(v, bool) else v for k, v in q.items()})
-        headers = {"Accept": "application/json, audio/*", "User-Agent": "voxdock-skill-cli"}
+        headers = {"Accept": "application/json, audio/*", "User-Agent": "voxdock-cli"}
         if self.key:
             headers["Authorization"] = f"Bearer {self.key}"
         if json_body is not None:

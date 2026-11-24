@@ -1,4 +1,4 @@
-"""Keep the Claude skill (.claude/skills/voxdock-api) in sync with the API, and exercise its CLI."""
+"""Keep skills/voxdock-api (API guide + CLI) in sync with the API, and exercise its CLI."""
 import importlib.util
 import io
 import json
@@ -12,7 +12,7 @@ import respx
 
 from .conftest import configure, make_wav
 
-SKILL = Path(__file__).resolve().parent.parent / ".claude" / "skills" / "voxdock-api"
+SKILL = Path(__file__).resolve().parent.parent / "skills" / "voxdock-api"
 # table rows: | `GET` | `/api/x` |   and headings:  ### `POST /api/tts`
 ROUTE_RE = re.compile(r"`(GET|POST|PUT|PATCH|DELETE)(?:`\s*\|\s*`| )(/[^`?\s]*)")
 

@@ -30,7 +30,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Lint
-        run: ruff check app tests .claude/skills
+        run: ruff check app tests skills
 
       - name: Test
         run: pytest
