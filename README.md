@@ -66,21 +66,41 @@
 
 ## 🖼 界面预览
 
+### 操作演示
+
+<p align="center">
+  <img src="docs/images/demo.gif" alt="VoxDock 操作演示：输入文本、调节语速、生成并播放，切换音色，多段参考音频复刻，平台接入指引，API 接入，切换浅色主题" width="100%">
+</p>
+
+<p align="center"><sub>输入文本 → 调节语速 → 生成并播放 → 切换音色 → 复刻（多段参考音频，可调整顺序）→ 平台接入指引 → API 接入 → 浅色主题</sub></p>
+
+### 页面截图
+
 <table>
 <tr>
 <td colspan="2"><img src="docs/images/studio.png" alt="合成工作台"><p align="center"><b>合成工作台</b>：选择音色、调节参数、实时波形回放</p></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/images/voices.png" alt="音色库"><p align="center"><b>音色库</b>：跨平台统一管理</p></td>
-<td width="50%"><img src="docs/images/clone.png" alt="复刻音色"><p align="center"><b>复刻新音色</b>：上传 / 录制 / URL</p></td>
+<td width="50%"><img src="docs/images/clone.png" alt="复刻音色"><p align="center"><b>复刻新音色</b>：多段参考音频，自动合并</p></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/providers.png" alt="平台配置"><p align="center"><b>平台配置</b>：密钥管理与连接测试</p></td>
+<td width="50%"><img src="docs/images/providers.png" alt="平台配置"><p align="center"><b>平台配置</b>：分步接入指引与一键跳转</p></td>
 <td width="50%"><img src="docs/images/api.png" alt="API 接入"><p align="center"><b>API 接入</b>：Key 管理与调用示例</p></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/images/history-light.png" alt="合成历史"><p align="center"><b>合成历史</b>（浅色主题）</p></td>
 <td width="50%"><img src="docs/images/studio-light.png" alt="浅色主题"><p align="center"><b>浅色主题</b></p></td>
+</tr>
+</table>
+
+### 移动端
+
+<table>
+<tr>
+<td align="center" width="33%"><img src="docs/images/mobile-studio.png" alt="移动端合成工作台" width="260"><br><sub><b>合成工作台</b></sub></td>
+<td align="center" width="33%"><img src="docs/images/mobile-voices.png" alt="移动端音色库" width="260"><br><sub><b>音色库</b></sub></td>
+<td align="center" width="33%"><img src="docs/images/mobile-providers.png" alt="移动端平台配置" width="260"><br><sub><b>平台配置</b></sub></td>
 </tr>
 </table>
 
