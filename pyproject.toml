@@ -1,0 +1,20 @@
+[project]
+name = "voxdock"
+version = "1.0.0"
+description = "Multi-platform voice cloning hub: Volcengine / Alibaba Cloud (CosyVoice · Qwen) / MiniMax / Zhipu"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008", "UP007"]

@@ -1,0 +1,206 @@
+name: Release
+
+# 推送 v* 标签：测试 → 构建多架构镜像推送到 GHCR + Windows 免安装版 → 创建 GitHub Release
+# 推送到 main：构建并推送 edge 镜像，Windows 版作为 Actions Artifact 上传
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*.*.*"]
+    paths-ignore: ["**.md", "docs/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  docker:
+    name: Build & push image
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name (lowercase)
+        id: vars
+        run: echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.vars.outputs.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=edge,enable={{is_default_branch}}
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  windows:
+    name: Windows portable build
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.0-dev.${GITHUB_SHA::7}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "__version__ = \"$V\"" > app/_version.py
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build VoxDock.exe
+        env:
+          VOXDOCK_VERSION: ${{ steps.ver.outputs.version }}
+        run: pyinstaller packaging/windows/voxdock.spec --noconfirm --clean
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $env:VOXDOCK_NO_BROWSER = "1"
+          $env:VOXDOCK_PORT = "18000"
+          $env:VOXDOCK_DATA_DIR = Join-Path $env:RUNNER_TEMP "voxdock-data"
+          $exe = Join-Path "dist" (Join-Path "VoxDock" "VoxDock.exe")
+          $p = Start-Process -FilePath $exe -PassThru -NoNewWindow
+          $ok = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+              $r = Invoke-RestMethod -Uri "http://127.0.0.1:18000/healthz" -TimeoutSec 2
+              if ($r.status -eq "ok") { $ok = $true; break }
+            } catch {}
+          }
+          if ($ok) {
+            $index = Invoke-WebRequest -Uri "http://127.0.0.1:18000/" -UseBasicParsing
+            $providers = Invoke-RestMethod -Uri "http://127.0.0.1:18000/api/providers"
+            Write-Host "index: $($index.StatusCode), providers: $($providers.items.Count), version: $($r.version)"
+            if ($providers.items.Count -lt 4) { $ok = $false }
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { throw "VoxDock.exe smoke test failed" }
+
+      - name: Package
+        run: python packaging/windows/package.py ${{ steps.ver.outputs.version }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voxdock-windows-x64
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [docker, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build deploy bundle
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          IMAGE="${{ needs.docker.outputs.image }}"
+          mkdir -p "dist/voxdock-${VERSION}"
+          sed "s#image: .*#image: ${IMAGE}:${VERSION#v}#" docker-compose.yml | sed '/^\s*build:/d;/# 本地构建/d' > "dist/voxdock-${VERSION}/docker-compose.yml"
+          cp .env.example "dist/voxdock-${VERSION}/.env.example"
+          cp README.md LICENSE "dist/voxdock-${VERSION}/"
+          (cd dist && zip -r "voxdock-${VERSION}-deploy.zip" "voxdock-${VERSION}")
+          git archive --format=tar.gz --prefix="voxdock-${VERSION}/" -o "dist/voxdock-${VERSION}-source.tar.gz" HEAD
+
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: voxdock-windows-x64
+          path: dist
+
+      - name: Release notes header
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IMAGE="${{ needs.docker.outputs.image }}"
+          cat > notes.md <<EOF
+          ## 🪟 Windows 免安装版
+
+          下载附件 \`VoxDock-${VERSION}-windows-x64.zip\`，解压后双击 \`VoxDock.exe\` 即可启动，浏览器会自动打开 http://127.0.0.1:8000 。
+          无需安装 Python，数据保存在程序目录下的 \`data\` 文件夹，详见压缩包内的「使用说明.txt」。
+
+          ## 🐳 Docker
+
+          \`\`\`bash
+          docker pull ${IMAGE}:${VERSION}
+
+          docker run -d --name voxdock -p 8000:8000 \\
+            -e VOXDOCK_ADMIN_PASSWORD=change-me \\
+            -v \$(pwd)/data:/data \\
+            ${IMAGE}:${VERSION}
+          \`\`\`
+
+          支持 \`linux/amd64\` 与 \`linux/arm64\`。也可下载附件中的 \`voxdock-${GITHUB_REF_NAME}-deploy.zip\`，解压后执行 \`docker compose up -d\`。
+
+          EOF
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            dist/*.zip
+            dist/*.tar.gz

@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" font-family="Inter, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0c14"/>
+      <stop offset="1" stop-color="#111326"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset=".55" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity=".0"/>
+      <stop offset=".25" stop-color="#8b5cf6" stop-opacity=".9"/>
+      <stop offset=".75" stop-color="#22d3ee" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx=".85" cy="0" r=".6">
+      <stop offset="0" stop-color="#6366f1" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#6366f1" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx=".05" cy="1" r=".5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="360" rx="28" fill="url(#bg)"/>
+  <rect width="1280" height="360" rx="28" fill="url(#glow1)"/>
+  <rect width="1280" height="360" rx="28" fill="url(#glow2)"/>
+
+  <!-- waveform -->
+  <g fill="url(#wave)" opacity=".55" transform="translate(90 0)">
+    <rect x="640" y="160" width="6" height="40" rx="3"/><rect x="656" y="130" width="6" height="100" rx="3"/>
+    <rect x="672" y="110" width="6" height="140" rx="3"/><rect x="688" y="145" width="6" height="70" rx="3"/>
+    <rect x="704" y="95" width="6" height="170" rx="3"/><rect x="720" y="125" width="6" height="110" rx="3"/>
+    <rect x="736" y="150" width="6" height="60" rx="3"/><rect x="752" y="105" width="6" height="150" rx="3"/>
+    <rect x="768" y="80" width="6" height="200" rx="3"/><rect x="784" y="120" width="6" height="120" rx="3"/>
+    <rect x="800" y="140" width="6" height="80" rx="3"/><rect x="816" y="100" width="6" height="160" rx="3"/>
+    <rect x="832" y="70" width="6" height="220" rx="3"/><rect x="848" y="115" width="6" height="130" rx="3"/>
+    <rect x="864" y="150" width="6" height="60" rx="3"/><rect x="880" y="125" width="6" height="110" rx="3"/>
+    <rect x="896" y="90" width="6" height="180" rx="3"/><rect x="912" y="135" width="6" height="90" rx="3"/>
+    <rect x="928" y="110" width="6" height="140" rx="3"/><rect x="944" y="155" width="6" height="50" rx="3"/>
+    <rect x="960" y="120" width="6" height="120" rx="3"/><rect x="976" y="100" width="6" height="160" rx="3"/>
+    <rect x="992" y="140" width="6" height="80" rx="3"/><rect x="1008" y="115" width="6" height="130" rx="3"/>
+    <rect x="1024" y="150" width="6" height="60" rx="3"/><rect x="1040" y="130" width="6" height="100" rx="3"/>
+    <rect x="1056" y="105" width="6" height="150" rx="3"/><rect x="1072" y="145" width="6" height="70" rx="3"/>
+    <rect x="1088" y="125" width="6" height="110" rx="3"/><rect x="1104" y="155" width="6" height="50" rx="3"/>
+    <rect x="1120" y="140" width="6" height="80" rx="3"/><rect x="1136" y="160" width="6" height="40" rx="3"/>
+    <rect x="1152" y="150" width="6" height="60" rx="3"/><rect x="1168" y="165" width="6" height="30" rx="3"/>
+  </g>
+
+  <!-- logo -->
+  <g transform="translate(88 92)">
+    <rect width="88" height="88" rx="24" fill="url(#brand)"/>
+    <g fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round">
+      <path d="M20 40v8"/><path d="M32 30v28"/><path d="M44 18v52"/><path d="M56 28v32"/><path d="M68 36v16"/>
+    </g>
+  </g>
+  <text x="200" y="152" font-size="64" font-weight="800" fill="#ffffff" letter-spacing="-1.5">VoxDock</text>
+  <text x="202" y="190" font-size="22" fill="#a9b0c2">多平台声音克隆聚合平台 · Voice Cloning Hub</text>
+
+  <!-- provider chips -->
+  <g font-size="17" font-weight="600" fill="#e6e8f0">
+    <g transform="translate(88 236)">
+      <rect width="138" height="40" rx="20" fill="#3370ff" fill-opacity=".16" stroke="#3370ff" stroke-opacity=".55"/>
+      <circle cx="22" cy="20" r="6" fill="#3370ff"/><text x="36" y="26">火山引擎</text>
+    </g>
+    <g transform="translate(238 236)">
+      <rect width="252" height="40" rx="20" fill="#ff6a00" fill-opacity=".16" stroke="#ff6a00" stroke-opacity=".55"/>
+      <circle cx="22" cy="20" r="6" fill="#ff6a00"/><text x="36" y="26">阿里云 · CosyVoice / 千问</text>
+    </g>
+    <g transform="translate(502 236)">
+      <rect width="124" height="40" rx="20" fill="#f23f5d" fill-opacity=".16" stroke="#f23f5d" stroke-opacity=".55"/>
+      <circle cx="22" cy="20" r="6" fill="#f23f5d"/><text x="36" y="26">MiniMax</text>
+    </g>
+    <g transform="translate(638 236)">
+      <rect width="118" height="40" rx="20" fill="#2563eb" fill-opacity=".16" stroke="#2563eb" stroke-opacity=".55"/>
+      <circle cx="22" cy="20" r="6" fill="#2563eb"/><text x="36" y="26">智谱 AI</text>
+    </g>
+  </g>
+  <text x="90" y="318" font-size="16" fill="#6d7589">音色管理 · 一键复刻 · 在线试听调参 · REST / OpenAI 兼容 API · Docker 一键部署</text>
+</svg>

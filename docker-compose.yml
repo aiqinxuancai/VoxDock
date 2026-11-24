@@ -1,0 +1,18 @@
+services:
+  voxdock:
+    image: ghcr.io/aiqinxuancai/voxdock:latest
+    # 本地构建：docker compose up -d --build
+    build: .
+    container_name: voxdock
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TZ: Asia/Shanghai
+      # 管理员密码（强烈建议设置，设置后 API 需携带 API Key）
+      VOXDOCK_ADMIN_PASSWORD: ${VOXDOCK_ADMIN_PASSWORD:-}
+    volumes:
+      - ./data:/data
