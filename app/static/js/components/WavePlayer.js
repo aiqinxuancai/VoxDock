@@ -45,7 +45,7 @@ export const WavePlayer = {
     compact: Boolean,
     autoplay: Boolean,
   },
-  emits: ['ended', 'error'],
+  emits: ['ended', 'error', 'loaded'],
   data: () => ({ playing: false, current: 0, duration: 0, loading: false, hover: -1, real: false }),
   computed: {
     fmtCur() { return this.fmt(this.current); },
@@ -55,7 +55,12 @@ export const WavePlayer = {
   mounted() {
     const a = (this.audio = new Audio());
     a.preload = 'auto';
-    a.addEventListener('loadedmetadata', () => { if (isFinite(a.duration)) this.duration = a.duration; });
+    a.addEventListener('loadedmetadata', () => {
+      if (isFinite(a.duration)) {
+        this.duration = a.duration;
+        if (!this.real) this.$emit('loaded', a.duration);
+      }
+    });
     a.addEventListener('durationchange', () => { if (isFinite(a.duration)) this.duration = a.duration; });
     a.addEventListener('play', () => { this.playing = true; this.loop(); });
     a.addEventListener('pause', () => { this.playing = false; this.draw(); });
@@ -111,6 +116,7 @@ export const WavePlayer = {
         this.peaks = computePeaks(buf);
         this.duration = buf.duration;
         this.real = true;
+        this.$emit('loaded', buf.duration);
       } catch { /* keep placeholder peaks */ }
       this.loading = false;
       this.draw();

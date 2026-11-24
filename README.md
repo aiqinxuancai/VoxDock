@@ -28,7 +28,7 @@
 
 **VoxDock** 是一个基于 Python（FastAPI）的自托管 Web 服务。它把 **火山引擎（豆包语音）**、**阿里云百炼（CosyVoice / 千问 Qwen-TTS）**、**MiniMax**、**智谱 AI（GLM-TTS）** 的声音复刻与语音合成能力整合到同一个界面和同一套 API 中：
 
-- 🎙️ **复刻声音**：上传音频、在浏览器中录音或填写 URL，几步就能生成专属音色
+- 🎙️ **复刻声音**：上传音频、在浏览器中录音或填写 URL，**支持多段参考音频**，几步就能生成专属音色
 - 🗂️ **管理音色**：统一的音色库，支持收藏、标签、状态跟踪，并能从各平台同步已有音色
 - 🎛️ **试听调参**：根据各平台的参数自动生成调节面板，实时生成并显示波形播放
 - 🔌 **简单 API**：一个 `POST /api/tts` 就能用任意平台的音色合成，还兼容 OpenAI TTS 接口
@@ -44,7 +44,8 @@
 - 深色 / 浅色主题，适配桌面和移动端
 - 合成工作台：在音色选择器、文本编辑器和参数面板中操作，`Ctrl+Enter` 一键生成
 - 波形播放器 + 全局迷你播放条，支持拖动定位
-- 浏览器内录音，自动编码为 24kHz WAV，并提供朗读文稿
+- 浏览器内录音，自动编码为 24kHz WAV；可连续录多段，朗读文稿自动轮换
+- 多段参考音频：可排序、删除；平台只支持单条时，按顺序合并并在每段之间插入 2 秒静音
 - 合成历史：回放、下载，可一键把文本和参数复用到工作台
 
 </td>
@@ -54,8 +55,9 @@
 - 统一抽象 4 个平台的复刻、查询、列表、删除和合成
 - 训练状态在后台自动轮询（火山 / 阿里审核）
 - 平台试听音频自动转存本地，不受链接过期影响
-- 参考音频格式不受支持时，用 ffmpeg 自动转换
+- 参考音频格式不受支持时，用 ffmpeg 自动转换；多段 WAV 合并使用纯 Python 实现，不依赖 ffmpeg
 - 管理员登录 + API Key 鉴权，平台密钥只显示脱敏后的内容
+- 平台配置页内置分步接入指引，可一键跳转到各平台的开通、充值、API Key 页面
 - 自带 Swagger / ReDoc 交互式文档
 
 </td>
@@ -174,11 +176,11 @@ curl "http://localhost:8000/api/tts?voice=1&text=你好&api_key=vd-xxxx" -o outp
 # 音色列表（支持 provider / status / q 筛选）
 curl http://localhost:8000/api/voices -H "Authorization: Bearer vd-xxxx"
 
-# 上传参考音频复刻
+# 上传参考音频复刻（file 字段可以重复传多段）
 curl -X POST http://localhost:8000/api/voices/clone \
   -H "Authorization: Bearer vd-xxxx" \
   -F provider=aliyun -F name=我的声音 -F model=cosyvoice-v3-plus \
-  -F file=@sample.wav
+  -F file=@part1.wav -F file=@part2.mp3
 ```
 
 ### OpenAI 兼容
@@ -199,7 +201,7 @@ with client.audio.speech.with_streaming_response.create(
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/api/voices` | 音色列表 |
-| `POST` | `/api/voices/clone` | 复刻新音色（multipart） |
+| `POST` | `/api/voices/clone` | 复刻新音色（multipart，`file` 可传多个） |
 | `POST` | `/api/voices` | 添加已有平台音色 |
 | `GET` / `PATCH` / `DELETE` | `/api/voices/{id}` | 详情 / 编辑 / 删除（`?remote=true` 同时删除平台音色） |
 | `POST` | `/api/voices/{id}/refresh` | 刷新训练状态 |
@@ -224,7 +226,9 @@ with client.audio.speech.with_streaming_response.create(
 | `VOXDOCK_SECRET_KEY` | 自动生成 | 会话签名密钥 |
 | `VOXDOCK_DATA_DIR` | `data`（容器内 `/data`） | SQLite 数据库与音频文件目录 |
 | `VOXDOCK_REQUEST_TIMEOUT` | `120` | 调用平台的超时时间（秒） |
-| `VOXDOCK_MAX_UPLOAD_MB` | `20` | 参考音频大小上限 |
+| `VOXDOCK_MAX_UPLOAD_MB` | `20` | 单个参考音频文件的大小上限 |
+| `VOXDOCK_MAX_REFERENCE_AUDIOS` | `10` | 单次复刻最多上传几段参考音频 |
+| `VOXDOCK_MERGE_GAP_SECONDS` | `2` | 多段参考音频本地合并时的静音间隔（秒） |
 | `VOLC_API_KEY` / `VOLC_APP_ID` / `VOLC_ACCESS_TOKEN` | | 火山引擎：新版 API Key，或旧版 AppID + Token |
 | `VOLC_SPEAKER_IDS` | | 火山已购音色 ID，用于同步 |
 | `DASHSCOPE_API_KEY` / `DASHSCOPE_BASE_URL` | | 阿里云百炼；新加坡地域请使用 `https://dashscope-intl.aliyuncs.com` |
@@ -302,6 +306,16 @@ MiniMax 规定：复刻的音色如果 7 天内没有用于正式合成，会被
 <summary><b>阿里云复刻后状态一直是「训练中」？</b></summary>
 
 CosyVoice / Qwen-Audio 的音色需要经过审核（`DEPLOYING` → `OK`），VoxDock 会在后台自动轮询，也可以在音色卡片菜单中点击「刷新状态」。千问 Qwen3-TTS-VC 的音色创建后即可使用。
+</details>
+
+<details>
+<summary><b>多段参考音频是怎么处理的？</b></summary>
+
+目前这 4 个平台的复刻接口都只接收一条参考音频。上传或录制多段时，VoxDock 会按列表顺序把它们合并成一条 24kHz 单声道 WAV，每段之间插入 2 秒静音（可用 `VOXDOCK_MERGE_GAP_SECONDS` 调整），再提交给平台。合并结果会保存为音色的参考音频，可以在音色库中回放。
+
+- 都是 WAV 时直接用 Python 合并；包含 mp3 / m4a 等格式时，服务端用 ffmpeg 解码。服务端没有 ffmpeg 时，网页会先在浏览器里把这些文件转成 WAV。
+- 「参考文本」要按顺序写出全部片段的内容（录音时会自动填入）。合并后的总时长也要符合各平台的限制，例如智谱建议 3~30 秒。
+
 </details>
 
 <details>

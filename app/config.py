@@ -67,8 +67,12 @@ class Settings(BaseSettings):
 
     # 调用各平台的超时时间（秒）
     request_timeout: float = 120.0
-    # 上传参考音频大小上限（MB）
+    # 上传参考音频大小上限（MB，单个文件）
     max_upload_mb: int = 20
+    # 单次复刻最多上传的参考音频段数
+    max_reference_audios: int = 10
+    # 平台只支持单条参考音频时，多段音频本地合并的间隔（秒）
+    merge_gap_seconds: float = 2.0
     # 单次合成文本长度上限
     max_text_length: int = 10000
 

@@ -72,6 +72,9 @@ async def system_info(session: AsyncSession = Depends(get_session)):
         "version": APP_VERSION,
         "auth_enabled": auth_enabled(),
         "ffmpeg": ffmpeg_available(),
+        "max_reference_audios": get_settings().max_reference_audios,
+        "merge_gap_seconds": get_settings().merge_gap_seconds,
+        "max_upload_mb": get_settings().max_upload_mb,
         "stats": {
             "voices": sum(c for _, c in voices),
             "voices_by_provider": {p: c for p, c in voices},

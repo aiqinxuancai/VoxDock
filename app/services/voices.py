@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..audio import AudioError, detect_format, ensure_format
+from ..audio import AudioError, detect_format, ensure_format, merge_clips
 from ..config import get_settings
 from ..db import session_factory
 from ..models import Voice, utcnow
@@ -67,20 +67,51 @@ async def _store_demo(voice: Voice, provider, *, data: bytes | None = None, fmt:
         voice.demo_path = storage.save("demos", data, fmt if fmt and fmt != "unknown" else "mp3")
 
 
-async def prepare_audio(provider_name: str, data: bytes, filename: str | None) -> tuple[bytes, str]:
-    settings = get_settings()
-    if len(data) > settings.max_upload_mb * 1024 * 1024:
-        raise ProviderError(f"音频文件过大（上限 {settings.max_upload_mb}MB）", status_code=413)
-    if len(data) < 1024:
-        raise ProviderError("音频文件过小或为空", status_code=400)
-    cls = get_provider_cls(provider_name)
-    fmt = detect_format(data, filename)
-    if fmt == "unknown":
-        raise ProviderError("无法识别的音频格式，请上传 wav / mp3 / m4a", status_code=400)
+async def _ensure_supported(cls, data: bytes, fmt: str) -> tuple[bytes, str]:
     try:
         return await ensure_format(data, fmt, cls.clone_audio_formats)
     except AudioError as e:
         raise ProviderError(f"{cls.label} 仅支持 {'/'.join(cls.clone_audio_formats)} 格式；{e}", status_code=400) from e
+
+
+async def prepare_reference(
+    provider_name: str, files: list[tuple[bytes, str | None]]
+) -> tuple[bytes, str, list[tuple[bytes, str]], dict[str, Any]]:
+    """Validate reference clips and adapt them to the provider.
+
+    Returns (audio, format, clips, info). When the provider accepts fewer clips than uploaded,
+    the clips are merged locally in order with ``merge_gap_seconds`` of silence in between.
+    """
+    settings = get_settings()
+    cls = get_provider_cls(provider_name)
+    if len(files) > settings.max_reference_audios:
+        raise ProviderError(f"参考音频最多 {settings.max_reference_audios} 段", status_code=400)
+    clips: list[tuple[bytes, str]] = []
+    for idx, (data, filename) in enumerate(files, 1):
+        label = f"第 {idx} 段音频" if len(files) > 1 else "音频文件"
+        if len(data) > settings.max_upload_mb * 1024 * 1024:
+            raise ProviderError(f"{label}过大（上限 {settings.max_upload_mb}MB）", status_code=413)
+        if len(data) < 1024:
+            raise ProviderError(f"{label}过小或为空", status_code=400)
+        fmt = detect_format(data, filename)
+        if fmt == "unknown":
+            raise ProviderError(f"{label}格式无法识别，请上传 wav / mp3 / m4a", status_code=400)
+        clips.append((data, fmt))
+
+    info: dict[str, Any] = {"reference_count": len(clips)}
+    if len(clips) == 1:
+        audio, fmt = await _ensure_supported(cls, *clips[0])
+        return audio, fmt, [], info
+    if len(clips) <= cls.max_reference_audios:
+        converted = [await _ensure_supported(cls, d, f) for d, f in clips]
+        return converted[0][0], converted[0][1], converted, info
+    try:
+        merged, duration_ms = await merge_clips(clips, settings.merge_gap_seconds)
+    except AudioError as e:
+        raise ProviderError(str(e), status_code=400) from e
+    info.update(merged=True, merge_gap_seconds=settings.merge_gap_seconds, reference_duration_ms=duration_ms)
+    audio, fmt = await _ensure_supported(cls, merged, "wav")
+    return audio, fmt, [], info
 
 
 async def clone_voice(
@@ -95,8 +126,7 @@ async def clone_voice(
     description: str = "",
     tags: list[str] | None = None,
     options: dict[str, Any] | None = None,
-    audio: bytes | None = None,
-    filename: str | None = None,
+    files: list[tuple[bytes, str | None]] | None = None,
     audio_url: str = "",
 ) -> Voice:
     cls = get_provider_cls(provider_name)
@@ -105,9 +135,13 @@ async def clone_voice(
     name = (name or "").strip()
     if not name:
         raise ProviderError("请填写音色名称", status_code=400)
+    files = [(d, n) for d, n in (files or []) if d]
+    audio: bytes | None = None
     fmt = ""
-    if audio:
-        audio, fmt = await prepare_audio(provider_name, audio, filename)
+    clips: list[tuple[bytes, str]] = []
+    ref_info: dict[str, Any] = {}
+    if files:
+        audio, fmt, clips, ref_info = await prepare_reference(provider_name, files)
     elif audio_url:
         if not cls.capabilities.get("audio_url"):
             raise ProviderError(f"{cls.label} 不支持通过 URL 复刻，请上传音频文件", status_code=400)
@@ -127,6 +161,7 @@ async def clone_voice(
         demo_text=demo_text.strip(),
         language=str(options.get("language") or ""),
         options=options,
+        clips=clips,
     )
     result = await provider.clone(req)
 
@@ -143,7 +178,12 @@ async def clone_voice(
     voice.language = req.language
     voice.source = "clone"
     voice.sample_text = req.transcript
-    voice.extra = {**(voice.extra or {}), **result.extra, "options": options}
+    voice.extra = {**(voice.extra or {}), **result.extra, **ref_info, "options": options}
+    stale = [] if ref_info.get("merged") else ["merged", "merge_gap_seconds", "reference_duration_ms"]
+    if not ref_info:
+        stale.append("reference_count")
+    for key in stale:
+        voice.extra.pop(key, None)
     if audio:
         storage.remove(voice.sample_path)
         voice.sample_path = storage.save("samples", audio, fmt)

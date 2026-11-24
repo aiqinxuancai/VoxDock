@@ -88,7 +88,11 @@ async def clone_voice(
     tags: str = Form("", description="逗号分隔"),
     options: str = Form("{}", description="平台特定选项 JSON"),
     audio_url: str = Form("", description="公网音频 URL（部分平台支持）"),
-    file: UploadFile | None = File(None, description="参考音频文件"),
+    file: list[UploadFile] | None = File(
+        None,
+        description="参考音频文件，可重复传多个（-F file=@a.wav -F file=@b.wav）。"
+        "平台只支持单条时按顺序本地合并，每段间隔 2 秒",
+    ),
     session: AsyncSession = Depends(get_session),
 ):
     try:
@@ -97,7 +101,7 @@ async def clone_voice(
             raise ValueError
     except ValueError:
         raise HTTPException(status_code=400, detail="options 必须是 JSON 对象") from None
-    audio = await file.read() if file is not None else None
+    files = [(await f.read(), f.filename) for f in (file or [])]
     voice = await svc.clone_voice(
         session,
         provider_name=provider,
@@ -109,8 +113,7 @@ async def clone_voice(
         description=description,
         tags=[t.strip() for t in tags.replace("，", ",").split(",") if t.strip()],
         options=opts,
-        audio=audio or None,
-        filename=file.filename if file is not None else None,
+        files=files,
         audio_url=audio_url,
     )
     return svc.voice_to_dict(voice)

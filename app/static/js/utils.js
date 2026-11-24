@@ -133,4 +133,28 @@ export const SAMPLE_TEXTS = [
   { label: 'English', text: 'Hello there! Welcome to VoxDock, where your voice comes to life in every language you can imagine.' },
 ];
 
-export const READ_SCRIPT = '清晨的阳光透过窗帘洒进房间，我泡了一杯热茶，打开窗户，听见楼下传来自行车的铃声和早点摊的吆喝声。新的一天开始了，我想把今天过得简单而充实：读几页书，散一会儿步，再给远方的朋友打个电话，聊聊最近的生活。';
+// Rotating read-aloud scripts so multiple recordings cover more phonemes and tones
+export const READ_SCRIPTS = [
+  '清晨的阳光透过窗帘洒进房间，我泡了一杯热茶，打开窗户，听见楼下传来自行车的铃声和早点摊的吆喝声。新的一天开始了，我想把今天过得简单而充实：读几页书，散一会儿步，再给远方的朋友打个电话，聊聊最近的生活。',
+  '周末的午后，我们沿着河边慢慢地走，柳枝在风里轻轻摇晃，偶尔有几只白鹭从水面掠过。你问我最喜欢哪个季节，我想了想说，大概是秋天吧，天高云淡，空气里都是桂花的香味。',
+  '各位朋友大家好，欢迎来到今天的分享。接下来的二十分钟里，我会用三个小故事，聊一聊怎样把复杂的事情讲清楚。准备好了吗？那我们现在就开始吧！',
+  '真的吗？这也太让人惊喜了！我本来以为今天只是普通的一天，没想到你们悄悄准备了这么多。谢谢大家，我一定会好好珍惜这份心意。',
+];
+export const READ_SCRIPT = READ_SCRIPTS[0];
+
+/** Decode any browser-supported audio blob and re-encode it as 24kHz mono 16-bit WAV. */
+export async function blobToWav(blob, outputRate = 24000) {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx();
+  try {
+    const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const mono = new Float32Array(buf.length);
+    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+      const data = buf.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) mono[i] += data[i] / buf.numberOfChannels;
+    }
+    return encodeWav([mono], buf.sampleRate, Math.min(outputRate, buf.sampleRate));
+  } finally {
+    ctx.close().catch(() => {});
+  }
+}

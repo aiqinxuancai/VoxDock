@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import os
 import shutil
 import struct
 import sys
+import tempfile
+import wave
+from array import array
 from pathlib import Path
 
 MIME_TYPES = {
@@ -133,12 +137,33 @@ def ffmpeg_available() -> bool:
     return ffmpeg_path() is not None
 
 
-async def convert_audio(data: bytes, target: str = "wav", sample_rate: int | None = None) -> bytes:
-    """Convert audio via ffmpeg (stdin -> stdout)."""
+async def _run_ffmpeg(data: bytes, output_args: list[str]) -> bytes:
+    """Run ffmpeg on ``data`` (via a temp file, so seek-dependent containers like m4a work) -> stdout bytes."""
     exe = ffmpeg_path()
     if not exe:
         raise AudioError("服务器未安装 ffmpeg，无法转换音频格式，请上传 wav/mp3 文件")
-    args = [exe, "-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-ac", "1"]
+    fd, src = tempfile.mkstemp(prefix="voxdock-", suffix=".audio")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        proc = await asyncio.create_subprocess_exec(
+            exe, "-hide_banner", "-loglevel", "error", "-i", src, *output_args, "pipe:1",
+            stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await proc.communicate()
+    finally:
+        try:
+            os.unlink(src)
+        except OSError:
+            pass
+    if proc.returncode != 0 or not out:
+        raise AudioError(f"音频转换失败: {err.decode(errors='ignore')[:300]}")
+    return out
+
+
+async def convert_audio(data: bytes, target: str = "wav", sample_rate: int | None = None) -> bytes:
+    """Convert audio to mono ``target`` via ffmpeg."""
+    args = ["-ac", "1"]
     if sample_rate:
         args += ["-ar", str(sample_rate)]
     if target == "wav":
@@ -147,14 +172,94 @@ async def convert_audio(data: bytes, target: str = "wav", sample_rate: int | Non
         args += ["-acodec", "libmp3lame", "-b:a", "192k", "-f", "mp3"]
     else:
         args += ["-f", target]
-    args.append("pipe:1")
-    proc = await asyncio.create_subprocess_exec(
-        *args, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-    )
-    out, err = await proc.communicate(data)
-    if proc.returncode != 0 or not out:
-        raise AudioError(f"音频转换失败: {err.decode(errors='ignore')[:300]}")
-    return out
+    return await _run_ffmpeg(data, args)
+
+
+# ---------------------------------------------------------------- merging
+MERGE_SAMPLE_RATE = 24000
+
+
+def wav_to_pcm16(data: bytes) -> tuple[bytes, int, int] | None:
+    """Parse an integer-PCM WAV into (16-bit little-endian PCM, sample_rate, channels); None if unsupported."""
+    try:
+        with wave.open(io.BytesIO(data)) as w:
+            channels, width, rate = w.getnchannels(), w.getsampwidth(), w.getframerate()
+            frames = w.readframes(w.getnframes())
+    except (wave.Error, EOFError, ValueError):
+        return None
+    if width == 2:
+        pcm = frames
+    elif width == 1:  # unsigned 8-bit
+        pcm = array("h", ((b - 128) << 8 for b in frames)).tobytes()
+    elif width in (3, 4):  # keep the most significant 16 bits
+        pcm = b"".join(frames[i + width - 2:i + width] for i in range(0, len(frames) - width + 1, width))
+    else:
+        return None
+    return pcm[: len(pcm) - len(pcm) % (2 * channels)], rate, channels
+
+
+def pcm16_to_mono(pcm: bytes, channels: int) -> bytes:
+    if channels <= 1:
+        return pcm
+    a = array("h")
+    a.frombytes(pcm)
+    if channels == 2:
+        return array("h", ((left + right) >> 1 for left, right in zip(a[0::2], a[1::2], strict=False))).tobytes()
+    return array("h", (sum(a[i:i + channels]) // channels for i in range(0, len(a), channels))).tobytes()
+
+
+def resample_pcm16(pcm: bytes, src: int, dst: int) -> bytes:
+    """Mono 16-bit resampling: box-average when downsampling, linear interpolation when upsampling."""
+    if src == dst or not pcm:
+        return pcm
+    a = array("h")
+    a.frombytes(pcm)
+    n = len(a)
+    out_len = max(1, int(n * dst / src))
+    step = src / dst
+    if step >= 1:
+        out = array("h", (
+            sum(a[s:e]) // (e - s)
+            for s, e in ((int(i * step), max(int(i * step) + 1, min(n, int((i + 1) * step)))) for i in range(out_len))
+        ))
+    else:
+        last = n - 1
+        vals = []
+        for i in range(out_len):
+            pos = i * step
+            j = int(pos)
+            vals.append(a[last] if j >= last else int(a[j] + (a[j + 1] - a[j]) * (pos - j)))
+        out = array("h", vals)
+    return out.tobytes()
+
+
+async def merge_clips(
+    clips: list[tuple[bytes, str]], gap_seconds: float = 2.0, target_rate: int = MERGE_SAMPLE_RATE
+) -> tuple[bytes, int]:
+    """Concatenate clips into one mono 16-bit WAV with ``gap_seconds`` of silence between them.
+
+    Integer-PCM WAVs are merged in pure Python; other containers are decoded with ffmpeg.
+    Returns (wav_bytes, duration_ms).
+    """
+    if not clips:
+        raise AudioError("没有可合并的音频")
+    decoded: list[tuple[bytes, int]] = []
+    for idx, (data, fmt) in enumerate(clips, 1):
+        parsed = wav_to_pcm16(data) if fmt == "wav" else None
+        if parsed is not None:
+            pcm, rate, channels = parsed
+            decoded.append((await asyncio.to_thread(pcm16_to_mono, pcm, channels), rate))
+            continue
+        if not ffmpeg_available():
+            raise AudioError(f"第 {idx} 段音频为 {fmt} 格式，合并多段非 WAV 音频需要 ffmpeg；请上传 wav 文件或使用网页录音")
+        pcm = await _run_ffmpeg(data, ["-ac", "1", "-ar", str(target_rate), "-acodec", "pcm_s16le", "-f", "s16le"])
+        decoded.append((pcm, target_rate))
+    rates = {rate for _, rate in decoded}
+    out_rate = rates.pop() if len(rates) == 1 else target_rate
+    parts = [await asyncio.to_thread(resample_pcm16, pcm, rate, out_rate) for pcm, rate in decoded]
+    silence = b"\x00\x00" * int(round(out_rate * max(0.0, gap_seconds)))
+    pcm = silence.join(parts)
+    return pcm_to_wav(pcm, out_rate), int(len(pcm) / 2 * 1000 / out_rate)
 
 
 async def ensure_format(data: bytes, fmt: str, allowed: list[str]) -> tuple[bytes, str]:

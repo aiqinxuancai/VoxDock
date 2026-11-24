@@ -6,7 +6,7 @@ import { copyText, timeAgo } from '../utils.js';
 
 const ENDPOINTS = [
   ['GET', '/api/voices', '音色列表（支持 provider / status / q 筛选）'],
-  ['POST', '/api/voices/clone', '上传参考音频复刻新音色（multipart）'],
+  ['POST', '/api/voices/clone', '上传参考音频复刻新音色（multipart，file 可传多个，自动合并）'],
   ['POST', '/api/voices', '添加已有平台音色到音色库'],
   ['GET', '/api/voices/{id}', '音色详情'],
   ['PATCH', '/api/voices/{id}', '编辑音色（名称/标签/默认参数）'],
@@ -51,10 +51,11 @@ curl "${B}/api/tts?voice=${V}&text=你好&api_key=${K}" -o output.mp3
 curl -X POST ${B}/api/tts -H "Authorization: Bearer ${K}" -H "Content-Type: application/json" \\
   -d '{"voice": "minimax:male-qn-qingse", "text": "你好"}' -o output.mp3
 
-# 5) 复刻新音色
+# 5) 复刻新音色（file 可重复传多段，平台只支持单条时会按顺序合并，每段间隔 2 秒）
 curl -X POST ${B}/api/voices/clone \\
   -H "Authorization: Bearer ${K}" \\
-  -F provider=minimax -F name=我的声音 -F file=@sample.wav`,
+  -F provider=minimax -F name=我的声音 \\
+  -F file=@part1.wav -F file=@part2.wav`,
         python: `import requests
 
 BASE = "${B}"
@@ -74,12 +75,12 @@ resp = requests.post(f"{BASE}/api/tts", headers=HEADERS, json={
 resp.raise_for_status()
 open("output.mp3", "wb").write(resp.content)
 
-# 复刻新音色
-with open("sample.wav", "rb") as f:
-    voice = requests.post(f"{BASE}/api/voices/clone", headers=HEADERS,
-                          data={"provider": "aliyun", "name": "我的声音", "model": "cosyvoice-v3-plus"},
-                          files={"file": f}).json()
-print(voice["id"], voice["status"])`,
+# 复刻新音色（多段参考音频：重复使用 file 字段）
+clips = [("file", open(p, "rb")) for p in ("part1.wav", "part2.mp3")]
+voice = requests.post(f"{BASE}/api/voices/clone", headers=HEADERS,
+                      data={"provider": "aliyun", "name": "我的声音", "model": "cosyvoice-v3-plus"},
+                      files=clips).json()
+print(voice["id"], voice["status"], voice["extra"].get("reference_count"))`,
         javascript: `const BASE = "${B}";
 const headers = { Authorization: "Bearer ${K}", "Content-Type": "application/json" };
 

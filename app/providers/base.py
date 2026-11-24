@@ -82,6 +82,9 @@ class CloneRequest:
     demo_text: str = ""
     language: str = ""
     options: dict[str, Any] = field(default_factory=dict)
+    # all clips (bytes, format) when the provider accepts several natively (max_reference_audios > 1);
+    # otherwise empty and ``audio`` holds the single (possibly merged) clip
+    clips: list[tuple[bytes, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -116,6 +119,8 @@ class BaseProvider:
     # accepted reference-audio containers
     clone_audio_formats: ClassVar[list[str]] = ["wav", "mp3"]
     clone_tips: ClassVar[list[str]] = []
+    # how many reference clips the clone API accepts natively; extra clips are merged locally
+    max_reference_audios: ClassVar[int] = 1
     # setup guide shown on the provider config page:
     # [{"title": str, "text": str, "links": [{"label": str, "url": str}]}]
     guide: ClassVar[list[dict[str, Any]]] = []
@@ -183,6 +188,7 @@ class BaseProvider:
             "default_model": cls.default_model(),
             "clone_audio_formats": cls.clone_audio_formats,
             "clone_tips": cls.clone_tips,
+            "max_reference_audios": cls.max_reference_audios,
             "guide": cls.guide,
             "credential_fields": [f.to_dict() for f in cls.credential_fields],
             "voice_id_field": cls.voice_id_field.to_dict() if cls.voice_id_field else None,
